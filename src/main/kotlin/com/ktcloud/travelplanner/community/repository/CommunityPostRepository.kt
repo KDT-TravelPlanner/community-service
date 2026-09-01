@@ -21,27 +21,26 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 				category.code,
 				post.title,
 				post.bodyPreview,
-				author.nickname,
-				author.profileImageUrl,
+				post.authorNickname,
+				post.authorProfileImageUrl,
 				post.viewCount,
 				post.sourceTravelId,
 				post.createdAt
 			)
 			FROM CommunityPost post
 			JOIN post.category category
-			JOIN post.author author
 			WHERE (:categoryCode IS NULL OR category.code = :categoryCode)
 				AND (:tagName IS NULL OR EXISTS (SELECT 1 FROM post.tags t WHERE t.name = :tagName))
 				AND (CAST(CAST(:periodStart AS string) AS timestamp) IS NULL OR post.createdAt >= CAST(CAST(:periodStart AS string) AS timestamp))
 				AND (CAST(CAST(:periodEnd AS string) AS timestamp) IS NULL OR post.createdAt < CAST(CAST(:periodEnd AS string) AS timestamp))
 				AND (:keyword IS NULL OR (
 					(:searchScope = 'TITLE' AND LOWER(post.title) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-					OR (:searchScope = 'AUTHOR' AND LOWER(author.nickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+					OR (:searchScope = 'AUTHOR' AND LOWER(post.authorNickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					OR (:searchScope = 'CONTENT' AND LOWER(post.bodyPreview) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					OR (:searchScope = 'TAG' AND EXISTS (SELECT 1 FROM post.tags st WHERE LOWER(st.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))))
 					OR (:searchScope = 'ALL' AND (
 						LOWER(post.title) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
-						OR LOWER(author.nickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+						OR LOWER(post.authorNickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
 						OR LOWER(post.bodyPreview) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
 						OR EXISTS (SELECT 1 FROM post.tags st2 WHERE LOWER(st2.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					))
@@ -52,19 +51,18 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 			SELECT COUNT(post)
 			FROM CommunityPost post
 			JOIN post.category category
-			JOIN post.author author
 			WHERE (:categoryCode IS NULL OR category.code = :categoryCode)
 				AND (:tagName IS NULL OR EXISTS (SELECT 1 FROM post.tags t WHERE t.name = :tagName))
 				AND (CAST(CAST(:periodStart AS string) AS timestamp) IS NULL OR post.createdAt >= CAST(CAST(:periodStart AS string) AS timestamp))
 				AND (CAST(CAST(:periodEnd AS string) AS timestamp) IS NULL OR post.createdAt < CAST(CAST(:periodEnd AS string) AS timestamp))
 				AND (:keyword IS NULL OR (
 					(:searchScope = 'TITLE' AND LOWER(post.title) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
-					OR (:searchScope = 'AUTHOR' AND LOWER(author.nickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+					OR (:searchScope = 'AUTHOR' AND LOWER(post.authorNickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					OR (:searchScope = 'CONTENT' AND LOWER(post.bodyPreview) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					OR (:searchScope = 'TAG' AND EXISTS (SELECT 1 FROM post.tags st WHERE LOWER(st.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))))
 					OR (:searchScope = 'ALL' AND (
 						LOWER(post.title) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
-						OR LOWER(author.nickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+						OR LOWER(post.authorNickname) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
 						OR LOWER(post.bodyPreview) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
 						OR EXISTS (SELECT 1 FROM post.tags st2 WHERE LOWER(st2.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
 					))
@@ -93,14 +91,13 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 				category.code AS categoryCode,
 				post.title AS title,
 				post.body_preview AS bodyPreview,
-				author.nickname AS authorNickname,
-				author.profile_image_url AS authorProfileImageUrl,
+				post.author_nickname AS authorNickname,
+				post.author_profile_image_url AS authorProfileImageUrl,
 				post.view_count AS viewCount,
 				post.source_travel_id AS sourceTravelId,
 				post.created_at AS createdAt
 			FROM community_post post
 			JOIN community_category category ON category.id = post.category_id
-			JOIN user_table author ON author.id = post.author_id
 			WHERE post.deleted_at IS NULL
 				AND (:categoryCode IS NULL OR category.code = :categoryCode)
 				AND (:tagName IS NULL OR EXISTS (
@@ -112,7 +109,7 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 				AND (CAST(:periodEnd AS timestamptz) IS NULL OR post.created_at < CAST(:periodEnd AS timestamptz))
 				AND (:keyword IS NULL OR (
 					(:searchScope = 'TITLE' AND LOWER(post.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
-					OR (:searchScope = 'AUTHOR' AND LOWER(author.nickname) LIKE LOWER(CONCAT('%', :keyword, '%')))
+					OR (:searchScope = 'AUTHOR' AND LOWER(post.author_nickname) LIKE LOWER(CONCAT('%', :keyword, '%')))
 					OR (:searchScope = 'CONTENT' AND LOWER(post.body_preview) LIKE LOWER(CONCAT('%', :keyword, '%')))
 					OR (:searchScope = 'TAG' AND EXISTS (
 						SELECT 1 FROM community_post_tag pt2
@@ -121,7 +118,7 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 					))
 					OR (:searchScope = 'ALL' AND (
 						LOWER(post.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-						OR LOWER(author.nickname) LIKE LOWER(CONCAT('%', :keyword, '%'))
+						OR LOWER(post.author_nickname) LIKE LOWER(CONCAT('%', :keyword, '%'))
 						OR LOWER(post.body_preview) LIKE LOWER(CONCAT('%', :keyword, '%'))
 						OR EXISTS (
 							SELECT 1 FROM community_post_tag pt3
@@ -139,7 +136,6 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 			SELECT COUNT(*)
 			FROM community_post post
 			JOIN community_category category ON category.id = post.category_id
-			JOIN user_table author ON author.id = post.author_id
 			WHERE post.deleted_at IS NULL
 				AND (:categoryCode IS NULL OR category.code = :categoryCode)
 				AND (:tagName IS NULL OR EXISTS (
@@ -151,7 +147,7 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 				AND (CAST(:periodEnd AS timestamptz) IS NULL OR post.created_at < CAST(:periodEnd AS timestamptz))
 				AND (:keyword IS NULL OR (
 					(:searchScope = 'TITLE' AND LOWER(post.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
-					OR (:searchScope = 'AUTHOR' AND LOWER(author.nickname) LIKE LOWER(CONCAT('%', :keyword, '%')))
+					OR (:searchScope = 'AUTHOR' AND LOWER(post.author_nickname) LIKE LOWER(CONCAT('%', :keyword, '%')))
 					OR (:searchScope = 'CONTENT' AND LOWER(post.body_preview) LIKE LOWER(CONCAT('%', :keyword, '%')))
 					OR (:searchScope = 'TAG' AND EXISTS (
 						SELECT 1 FROM community_post_tag pt2
@@ -160,7 +156,7 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 					))
 					OR (:searchScope = 'ALL' AND (
 						LOWER(post.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-						OR LOWER(author.nickname) LIKE LOWER(CONCAT('%', :keyword, '%'))
+						OR LOWER(post.author_nickname) LIKE LOWER(CONCAT('%', :keyword, '%'))
 						OR LOWER(post.body_preview) LIKE LOWER(CONCAT('%', :keyword, '%'))
 						OR EXISTS (
 							SELECT 1 FROM community_post_tag pt3
@@ -278,15 +274,14 @@ interface CommunityPostRepository : JpaRepository<CommunityPost, UUID> {
 				category.code AS categoryCode,
 				post.title AS title,
 				post.body_preview AS bodyPreview,
-				author.nickname AS authorNickname,
-				author.profile_image_url AS authorProfileImageUrl,
+				post.author_nickname AS authorNickname,
+				post.author_profile_image_url AS authorProfileImageUrl,
 				post.view_count AS viewCount,
 				post.source_travel_id AS sourceTravelId,
 				post.created_at AS createdAt,
 				post.deleted_at AS deletedAt
 			FROM community_post post
 			JOIN community_category category ON category.id = post.category_id
-			JOIN user_table author ON author.id = post.author_id
 			WHERE post.author_id = :authorId
 				AND (:includeDeleted = true OR post.deleted_at IS NULL)
 				AND (CAST(:periodStart AS timestamptz) IS NULL OR post.created_at >= CAST(:periodStart AS timestamptz))

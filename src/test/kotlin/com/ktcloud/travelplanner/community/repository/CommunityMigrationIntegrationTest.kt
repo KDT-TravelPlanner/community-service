@@ -15,12 +15,11 @@ class CommunityMigrationIntegrationTest : ContainerIntegrationTestSupport() {
 
 	@Test
 	fun `empty database applies community schema migrations`() {
-		// V19는 커뮤니티와 무관한 타임라인 마이그레이션이라 의도적으로 제외한다(원래도 그랬음).
 		assertEquals(
-			9,
+			7,
 			jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history " +
-					"WHERE version IN ('13', '14', '15', '16', '17', '18', '20', '21', '22') AND success = TRUE",
+					"WHERE version IN ('1', '2', '3', '4', '5', '6', '7') AND success = TRUE",
 				Int::class.java,
 			),
 		)
@@ -225,16 +224,9 @@ class CommunityMigrationIntegrationTest : ContainerIntegrationTestSupport() {
 		)
 	}
 
-	private fun insertUser(): java.util.UUID {
-		val userId = java.util.UUID.randomUUID()
-		jdbcTemplate.update(
-			"INSERT INTO user_table (id, provider, provider_user_id, created_at, updated_at) " +
-				"VALUES (?, 'GOOGLE', ?, now(), now())",
-			userId,
-			userId.toString(),
-		)
-		return userId
-	}
+	// community_post.author_id/community_comment.author_id는 더 이상 user_table을 향한 FK가 아니라서
+	// (author 서비스가 분리된 도메인이라 실제 User row가 필요 없다) 임의의 UUID를 그대로 쓴다.
+	private fun insertUser(): java.util.UUID = java.util.UUID.randomUUID()
 
 	private fun insertPost(authorId: java.util.UUID): java.util.UUID {
 		val postId = java.util.UUID.randomUUID()

@@ -10,6 +10,7 @@ import com.ktcloud.travelplanner.community.dto.CommunityPostSummaryResponse
 import com.ktcloud.travelplanner.community.dto.CommunityPostUpdateRequest
 import com.ktcloud.travelplanner.community.model.CommunityPost
 import com.ktcloud.travelplanner.community.model.CommunityTag
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.port.TravelAccessPort
 import com.ktcloud.travelplanner.community.port.UserLookupPort
 import com.ktcloud.travelplanner.community.repository.CommunityCategoryRepository
@@ -23,7 +24,6 @@ import com.ktcloud.travelplanner.global.response.PageResponse
 import com.ktcloud.travelplanner.global.dto.PatchField
 import com.ktcloud.travelplanner.global.util.toExclusiveEndOfDayInstant
 import com.ktcloud.travelplanner.global.util.toStartOfDayInstant
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.PageRequest
@@ -38,10 +38,6 @@ class CommunityPostService(
 	private val communityCategoryRepository: CommunityCategoryRepository,
 	private val communityTagRepository: CommunityTagRepository,
 	private val communityPostRepository: CommunityPostRepository,
-	// 게시글 생성 시 CommunityPost.author: User 엔티티 관계 자체를 채우는 데 필요 — 이번 스코프에서는
-	// 엔티티를 authorId: UUID로 바꾸지 않기로 했으므로(docs/msa-service-boundaries.md 참고) 직접 유지.
-	// DB 스키마 분리 후에도 identity.user_table SELECT 예외 권한으로 계속 동작한다.
-	private val userRepository: UserRepository,
 	private val userLookupPort: UserLookupPort,
 	private val travelAccessPort: TravelAccessPort,
 	private val objectMapper: ObjectMapper,
@@ -61,7 +57,7 @@ class CommunityPostService(
 		// 좌표) 프론트가 작성 시점에 한 번 조립해서 보내는 불변 스냅샷이라 화이트리스트 검증 대상이 아니다.
 		TiptapBodyJsonValidator.validate(request.bodyJson)
 
-		val author = userRepository.findById(authorId).orElseThrow(::CommunityPostAuthorNotFoundException)
+		val author = userLookupPort.findAuthor(authorId) ?: throw CommunityPostAuthorNotFoundException()
 
 		if (request.sourceTravelId != null) {
 			verifySourceTravelReadAccess(request.sourceTravelId, authorId)
@@ -70,7 +66,9 @@ class CommunityPostService(
 		val tags = normalizeTagNames(request.tags).map(::findOrCreateTag).toSet()
 
 		val post = CommunityPost(
-			author = author,
+			authorId = authorId,
+			authorNickname = author.nickname,
+			authorProfileImageUrl = author.profileImageUrl,
 			category = category,
 			title = request.title,
 			bodyJson = request.bodyJson.toString(),
@@ -87,7 +85,7 @@ class CommunityPostService(
 	// CommunityPost의 @SQLRestriction("deleted_at IS NULL")로 findById가 이미 soft delete를 걸러준다.
 	// existsById를 별도로 부르지 않고 findById 결과를 존재 확인 + 조회에 그대로 재사용한다.
 	// incrementViewCount(clearAutomatically=true)는 영속성 컨텍스트를 통째로 비워서 post를
-	// detach시키므로, post.author/category/tags 같은 LAZY 연관관계 접근(응답 DTO 조립)은
+	// detach시키므로, post.category/tags 같은 LAZY 연관관계 접근(응답 DTO 조립)은
 	// 반드시 increment 호출 이전에 전부 끝내야 한다 (그렇지 않으면 LazyInitializationException).
 	// viewCount는 increment 이후 값을 다시 조회하지 않고, 조회 시점 값에 +1을 더해 응답한다.
 	@Transactional
@@ -98,9 +96,8 @@ class CommunityPostService(
 		val post = communityPostRepository.findById(postId).orElseThrow(::CommunityPostNotFoundException)
 		val commentCount = communityPostRepository.countActiveComments(postId)
 		val reactionCount = communityPostRepository.countReactions(postId)
-		// author.id는 Lazy 프록시의 FK 컬럼 값이라 추가 조회 없이 읽힌다 — Port 안 거쳐도 됨.
-		// 닉네임/프로필사진 같은 실제 User 필드는 Port로 조회한다.
-		val author = userLookupPort.findAuthor(requireNotNull(post.author.id))
+		// 작성 시점 스냅샷 컬럼을 그대로 쓴다 — 목록/상세 조회에서는 Identity를 호출하지 않는다.
+		val author = AuthorSummary(id = post.authorId, nickname = post.authorNickname, profileImageUrl = post.authorProfileImageUrl)
 		val isReacted = requesterId != null && communityPostRepository.existsReaction(postId, requesterId)
 
 		val response = CommunityPostDetailResponse.from(
@@ -111,7 +108,7 @@ class CommunityPostService(
 			viewCount = post.viewCount + 1,
 			commentCount = commentCount,
 			reactionCount = reactionCount,
-			isMine = requesterId != null && requesterId == post.author.id,
+			isMine = requesterId != null && requesterId == post.authorId,
 			isReacted = isReacted,
 		)
 		communityPostRepository.incrementViewCount(postId)
@@ -130,7 +127,7 @@ class CommunityPostService(
 		request: CommunityPostUpdateRequest,
 	): CommunityPostDetailResponse {
 		val post = communityPostRepository.findById(postId).orElseThrow(::CommunityPostNotFoundException)
-		if (post.author.id != requesterId) {
+		if (post.authorId != requesterId) {
 			throw CommunityPostAccessDeniedException()
 		}
 		if (post.version != request.version) {
@@ -175,8 +172,8 @@ class CommunityPostService(
 			val commentCount = communityPostRepository.countActiveComments(postId)
 			val reactionCount = communityPostRepository.countReactions(postId)
 			val isReacted = communityPostRepository.existsReaction(postId, requesterId)
-			// author.id는 Lazy 프록시의 FK 컬럼 값이라 추가 조회 없이 읽힌다 — Port 안 거쳐도 됨.
-			val author = userLookupPort.findAuthor(requireNotNull(saved.author.id))
+			// 작성 시점 스냅샷 컬럼을 그대로 쓴다 — 수정 경로도 Identity를 호출하지 않는다.
+			val author = AuthorSummary(id = saved.authorId, nickname = saved.authorNickname, profileImageUrl = saved.authorProfileImageUrl)
 			return CommunityPostDetailResponse.from(
 				post = saved,
 				bodyJson = objectMapper.readTree(saved.bodyJson),
@@ -224,7 +221,7 @@ class CommunityPostService(
 		requesterId: UUID,
 	) {
 		val post = communityPostRepository.findById(postId).orElseThrow(::CommunityPostNotFoundException)
-		if (post.author.id != requesterId) {
+		if (post.authorId != requesterId) {
 			throw CommunityPostAccessDeniedException()
 		}
 		post.softDelete(Instant.now())

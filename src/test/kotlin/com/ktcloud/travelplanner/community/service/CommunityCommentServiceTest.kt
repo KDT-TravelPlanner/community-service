@@ -3,12 +3,11 @@ package com.ktcloud.travelplanner.community.service
 import com.ktcloud.travelplanner.community.dto.CommentCreateRequest
 import com.ktcloud.travelplanner.community.model.CommunityComment
 import com.ktcloud.travelplanner.community.model.CommunityPost
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.repository.CommentReactionCountRow
 import com.ktcloud.travelplanner.community.port.UserLookupPort
 import com.ktcloud.travelplanner.community.repository.CommunityCommentRepository
 import com.ktcloud.travelplanner.community.repository.CommunityPostRepository
-import com.ktcloud.travelplanner.user.model.User
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.ArgumentMatchers
@@ -27,12 +26,10 @@ import kotlin.test.assertTrue
 class CommunityCommentServiceTest {
 	private val communityPostRepository = mock(CommunityPostRepository::class.java)
 	private val communityCommentRepository = mock(CommunityCommentRepository::class.java)
-	private val userRepository = mock(UserRepository::class.java)
 	private val userLookupPort = mock(UserLookupPort::class.java)
 	private val service = CommunityCommentService(
 		communityPostRepository,
 		communityCommentRepository,
-		userRepository,
 		userLookupPort,
 	)
 
@@ -141,12 +138,9 @@ class CommunityCommentServiceTest {
 	fun `createComment saves a comment with zero reactions, returning isMine true`() {
 		val authorId = UUID.randomUUID()
 		val post = mock(CommunityPost::class.java)
-		val author = mock(User::class.java)
-		`when`(author.id).thenReturn(authorId)
-		`when`(author.nickname).thenReturn("작성자")
-		`when`(author.profileImageUrl).thenReturn(null)
+		val author = AuthorSummary(id = authorId, nickname = "작성자", profileImageUrl = null)
 		`when`(communityPostRepository.findById(postId)).thenReturn(Optional.of(post))
-		`when`(userRepository.findById(authorId)).thenReturn(Optional.of(author))
+		`when`(userLookupPort.findAuthor(authorId)).thenReturn(author)
 		var savedComment: CommunityComment? = null
 		`when`(communityCommentRepository.save(any(CommunityComment::class.java)))
 			.thenAnswer { it.getArgument<CommunityComment>(0).also { comment -> savedComment = comment } }
@@ -154,7 +148,7 @@ class CommunityCommentServiceTest {
 		val response = service.createComment(postId, authorId, CommentCreateRequest("좋은 글이네요"))
 
 		assertEquals(post, savedComment!!.post)
-		assertEquals(author, savedComment!!.author)
+		assertEquals(authorId, savedComment!!.authorId)
 		assertEquals("좋은 글이네요", savedComment!!.content)
 		assertEquals("좋은 글이네요", response.content)
 		assertTrue(response.isMine)
@@ -169,14 +163,14 @@ class CommunityCommentServiceTest {
 		assertThrows<CommunityPostNotFoundException> {
 			service.createComment(postId, UUID.randomUUID(), CommentCreateRequest("댓글"))
 		}
-		verifyNoInteractions(userRepository, communityCommentRepository)
+		verifyNoInteractions(userLookupPort, communityCommentRepository)
 	}
 
 	@Test
 	fun `createComment throws when the author does not exist`() {
 		val authorId = UUID.randomUUID()
 		`when`(communityPostRepository.findById(postId)).thenReturn(Optional.of(mock(CommunityPost::class.java)))
-		`when`(userRepository.findById(authorId)).thenReturn(Optional.empty())
+		`when`(userLookupPort.findAuthor(authorId)).thenReturn(null)
 
 		assertThrows<CommunityCommentAuthorNotFoundException> {
 			service.createComment(postId, authorId, CommentCreateRequest("댓글"))
@@ -325,14 +319,11 @@ class CommunityCommentServiceTest {
 		commentId: UUID = UUID.randomUUID(),
 		content: String = "댓글",
 	): CommunityComment {
-		val commentAuthor = mock(User::class.java)
-		`when`(commentAuthor.id).thenReturn(commentAuthorId)
-		`when`(commentAuthor.nickname).thenReturn("작성자")
-		`when`(commentAuthor.profileImageUrl).thenReturn(null)
-
 		val comment = mock(CommunityComment::class.java)
 		`when`(comment.id).thenReturn(commentId)
-		`when`(comment.author).thenReturn(commentAuthor)
+		`when`(comment.authorId).thenReturn(commentAuthorId)
+		`when`(comment.authorNickname).thenReturn("작성자")
+		`when`(comment.authorProfileImageUrl).thenReturn(null)
 		`when`(comment.content).thenReturn(content)
 		`when`(comment.createdAt).thenReturn(Instant.parse("2026-08-01T00:00:00Z"))
 		`when`(comment.updatedAt).thenReturn(null)

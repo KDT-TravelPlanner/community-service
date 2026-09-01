@@ -12,11 +12,11 @@ import java.util.UUID
 
 interface CommunityCommentRepository : JpaRepository<CommunityComment, UUID> {
 	// community-api-contract.md 2절 — 단일 depth, 페이지네이션 없이 작성순(오래된 순)으로 전부 반환.
-	// author를 매번 LAZY 조회하지 않도록 JOIN FETCH로 함께 가져온다.
+	// author_nickname/author_profile_image_url은 CommunityComment 자체 컬럼(작성 시점 스냅샷)이라
+	// 더 이상 별도 JOIN FETCH가 필요 없다.
 	@Query(
 		value = """
 			SELECT c FROM CommunityComment c
-			JOIN FETCH c.author
 			WHERE c.post.id = :postId
 			ORDER BY c.createdAt ASC
 		""",

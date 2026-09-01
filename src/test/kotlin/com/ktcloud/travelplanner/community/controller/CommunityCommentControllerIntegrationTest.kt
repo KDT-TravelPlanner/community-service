@@ -2,13 +2,13 @@ package com.ktcloud.travelplanner.community.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ktcloud.travelplanner.community.model.CommunityPost
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.repository.CommunityCategoryRepository
 import com.ktcloud.travelplanner.community.repository.CommunityPostRepository
 import com.ktcloud.travelplanner.global.security.JwtTokenService
+import com.ktcloud.travelplanner.testsupport.FakeExternalPortsConfiguration
+import com.ktcloud.travelplanner.testsupport.FakeUserLookupPort
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
-import com.ktcloud.travelplanner.user.model.OAuthProvider
-import com.ktcloud.travelplanner.user.model.User
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -30,11 +30,11 @@ import java.util.UUID
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FakeExternalPortsConfiguration::class)
 @Transactional
 class CommunityCommentControllerIntegrationTest(
 	@Autowired private val mockMvc: MockMvc,
-	@Autowired private val userRepository: UserRepository,
+	@Autowired private val fakeUserLookupPort: FakeUserLookupPort,
 	@Autowired private val communityCategoryRepository: CommunityCategoryRepository,
 	@Autowired private val communityPostRepository: CommunityPostRepository,
 	@Autowired private val jwtTokenService: JwtTokenService,
@@ -320,7 +320,7 @@ class CommunityCommentControllerIntegrationTest(
 
 	private fun createCommentViaApi(
 		postId: UUID,
-		author: User,
+		author: AuthorSummary,
 		text: String,
 	): UUID {
 		val result = mockMvc.post("/api/v1/community/posts/$postId/comments") {
@@ -333,25 +333,21 @@ class CommunityCommentControllerIntegrationTest(
 		)
 	}
 
-	private fun bearer(user: User): String =
-		"Bearer ${jwtTokenService.issueAccessToken(requireNotNull(user.id)).value}"
+	private fun bearer(author: AuthorSummary): String =
+		"Bearer ${jwtTokenService.issueAccessToken(author.id).value}"
 
-	private fun saveUser(suffix: String): User = userRepository.saveAndFlush(
-		User(
-			provider = OAuthProvider.GOOGLE,
-			providerUserId = "comment-$suffix-${UUID.randomUUID()}",
-			email = "$suffix@example.com",
-			name = suffix,
-		),
-	)
+	private fun saveUser(suffix: String): AuthorSummary =
+		fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = suffix)
 
-	private fun savePost(author: User): CommunityPost {
+	private fun savePost(author: AuthorSummary): CommunityPost {
 		val category = communityCategoryRepository.findByCodeAndIsActiveTrue("TRAVEL_REVIEW")!!
 		val bodyJson = objectMapper.readTree(
 			"""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"본문"}]}]}""",
 		)
 		val post = CommunityPost(
-			author = author,
+			authorId = author.id,
+			authorNickname = author.nickname,
+			authorProfileImageUrl = author.profileImageUrl,
 			category = category,
 			title = "댓글 테스트용 게시글",
 			bodyJson = bodyJson.toString(),
