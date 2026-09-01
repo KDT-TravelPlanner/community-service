@@ -21,7 +21,7 @@ import com.ktcloud.travelplanner.community.validation.TiptapBodyJsonValidator
 import com.ktcloud.travelplanner.global.exception.DomainException
 import com.ktcloud.travelplanner.global.exception.ErrorCode
 import com.ktcloud.travelplanner.global.response.PageResponse
-import com.ktcloud.travelplanner.global.dto.PatchField
+import com.ktcloud.travelplanner.common.web.PatchField
 import com.ktcloud.travelplanner.global.util.toExclusiveEndOfDayInstant
 import com.ktcloud.travelplanner.global.util.toStartOfDayInstant
 import org.springframework.dao.OptimisticLockingFailureException

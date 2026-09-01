@@ -1,23 +1,12 @@
 package com.ktcloud.travelplanner.global.exception
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import com.ktcloud.travelplanner.global.logging.RequestIdGenerator
 import com.ktcloud.travelplanner.global.logging.RequestLoggingContext
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 
-data class FieldErrorResponse(
-	val field: String,
-	val reason: String,
-)
-
-data class ApiErrorResponse(
-	val code: String,
-	val message: String,
-	val requestId: String,
-	@JsonInclude(JsonInclude.Include.NON_NULL)
-	val fieldErrors: List<FieldErrorResponse>? = null,
-)
+typealias FieldErrorResponse = com.ktcloud.travelplanner.common.response.FieldErrorResponse
+typealias ApiErrorResponse = com.ktcloud.travelplanner.common.response.ApiErrorResponse
 
 internal object ApiErrorResponseFactory {
 	private val requestIdGenerator = RequestIdGenerator()
