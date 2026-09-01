@@ -9,7 +9,6 @@ import com.ktcloud.travelplanner.WebConfig
 import com.ktcloud.travelplanner.global.security.ApiSecurityErrorHandler
 import com.ktcloud.travelplanner.global.security.JwtTokenService
 import com.ktcloud.travelplanner.global.security.SecurityConfig
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -41,9 +40,6 @@ class RequestLoggingIntegrationTest(
 ) {
 	@MockitoBean
 	private lateinit var jwtTokenService: JwtTokenService
-
-	@MockitoBean
-	private lateinit var userRepository: UserRepository
 
 	private val applicationLogger = LoggerFactory.getLogger(ApplicationLogger::class.java) as Logger
 	private val logAppender = ListAppender<ILoggingEvent>()
