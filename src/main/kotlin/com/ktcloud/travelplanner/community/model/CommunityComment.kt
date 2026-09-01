@@ -1,6 +1,5 @@
 package com.ktcloud.travelplanner.community.model
 
-import com.ktcloud.travelplanner.user.model.User
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -40,9 +39,10 @@ class CommunityComment(
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "post_id", nullable = false)
 	val post: CommunityPost,
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "author_id", nullable = false)
-	val author: User,
+	@Column(name = "author_id", nullable = false)
+	val authorId: UUID,
+	authorNickname: String?,
+	authorProfileImageUrl: String?,
 	content: String,
 ) : Persistable<UUID> {
 	@Transient
@@ -57,6 +57,16 @@ class CommunityComment(
 	fun markNotNew() {
 		isNew = false
 	}
+
+	// CommunityPost.authorNickname/authorProfileImageUrl과 동일한 사유 — 작성 시점 스냅샷,
+	// 목록/상세 조회에서 재조회하지 않는다.
+	@Column(name = "author_nickname", length = 30)
+	var authorNickname: String? = authorNickname
+		protected set
+
+	@Column(name = "author_profile_image_url", columnDefinition = "TEXT")
+	var authorProfileImageUrl: String? = authorProfileImageUrl
+		protected set
 
 	@Column(nullable = false, columnDefinition = "TEXT")
 	var content: String = content
