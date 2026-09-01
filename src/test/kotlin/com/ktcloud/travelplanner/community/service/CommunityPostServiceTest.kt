@@ -16,7 +16,7 @@ import com.ktcloud.travelplanner.community.validation.InvalidBodyJsonException
 import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.port.TravelAccessPort
 import com.ktcloud.travelplanner.community.port.UserLookupPort
-import com.ktcloud.travelplanner.global.dto.PatchField
+import com.ktcloud.travelplanner.common.web.PatchField
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.ArgumentMatchers.any
