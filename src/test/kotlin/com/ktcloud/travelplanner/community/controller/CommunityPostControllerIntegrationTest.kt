@@ -558,8 +558,8 @@ class CommunityPostControllerIntegrationTest(
 
 	@Test
 	fun `list endpoint keyword search respects searchScope (TITLE, AUTHOR, CONTENT, TAG, ALL)`() {
-		val author1 = saveUserWithNickname("search-author1", "김바다")
-		val author2 = saveUserWithNickname("search-author2", "박여행")
+		val author1 = saveUserWithNickname("김바다")
+		val author2 = saveUserWithNickname("박여행")
 
 		val titleMatch = savePost(author2, title = "부산 여행 후기 대박", bodyPreview = "평범한 본문입니다")
 		val authorMatch = savePost(author1, title = "일반 제목", bodyPreview = "평범한 본문입니다")
@@ -729,10 +729,8 @@ class CommunityPostControllerIntegrationTest(
 		return communityPostRepository.saveAndFlush(post)
 	}
 
-	private fun saveUserWithNickname(
-		suffix: String,
-		nickname: String,
-	): AuthorSummary = fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = nickname)
+	private fun saveUserWithNickname(nickname: String): AuthorSummary =
+		fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = nickname)
 
 	private fun setCreatedAt(
 		postId: UUID,
