@@ -363,8 +363,8 @@ class CommunityPostService(
 	}
 
 	// community-api-contract.md 0절 — 일정 기반 작성 진입은 해당 travel에 대한 조회 권한 보유자
-	// (OWNER/READ_ONLY/READ_WRITE, ACCEPTED)만 가능. TravelMemberQueryService.getTravelMembers와
-	// 동일한 권한 체크(오너 본인이거나 ACCEPTED 멤버여야 함)를 재검증한다.
+	// (OWNER/READ_ONLY/READ_WRITE, ACCEPTED)만 가능. Travel 서비스의 read-access API로 재검증한다
+	// (팀 확정 결정사항 4, HttpTravelAccessAdapter).
 	private fun verifySourceTravelReadAccess(
 		travelId: UUID,
 		requesterId: UUID,

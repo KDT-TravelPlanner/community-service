@@ -69,6 +69,11 @@ management:
       application: ${spring.application.name}
 
 app:
+  services:
+    identity:
+      base-url: ${IDENTITY_BASE_URL:http://identity:8080}
+    travel:
+      base-url: ${TRAVEL_BASE_URL:http://travel:8080}
   logging:
     error-frame-limit: 5
   external:
