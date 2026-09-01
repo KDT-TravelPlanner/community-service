@@ -9,12 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.get
+import org.springframework.test.web.servlet.post
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @ActiveProfiles("test")
@@ -29,7 +30,7 @@ class OpenApiDocumentationIntegrationTest(
 	@Autowired private val objectMapper: ObjectMapper,
 ) {
 	@Test
-	fun `OpenAPI document exposes only versioned API contracts with JWT security`() {
+	fun `OpenAPI document exposes only versioned community API contracts with JWT security`() {
 		val response = mockMvc.get("/v3/api-docs")
 			.andExpect {
 				status { isOk() }
@@ -42,7 +43,6 @@ class OpenApiDocumentationIntegrationTest(
 		assertEquals(OpenApiConfiguration.API_VERSION, document.path("info").path("version").asText())
 		assertBearerSecurity(document)
 		assertDocumentedPaths(document)
-		assertAuthenticationContracts(document)
 		assertRequestParameters(document)
 	}
 
@@ -68,7 +68,10 @@ class OpenApiDocumentationIntegrationTest(
 
 	@Test
 	fun `business API remains protected when documentation paths are public`() {
-		mockMvc.get("/api/v1/countries")
+		mockMvc.post("/api/v1/community/posts") {
+			contentType = MediaType.APPLICATION_JSON
+			content = """{"categoryCode":"TRAVEL_REVIEW","title":"t","bodyJson":{"type":"doc"}}"""
+		}
 			.andExpect {
 				status { isUnauthorized() }
 			}
@@ -82,6 +85,11 @@ class OpenApiDocumentationIntegrationTest(
 		assertTrue(document.path("security").single().has("bearerAuth"))
 	}
 
+	// community-api-contract.md 2절 — 커뮤니티 API 13개(카테고리/태그 목록 포함)가 전부 문서화됐는지.
+	// SecurityConfig의 permitAll 판정(GET 목록/상세/댓글목록, 카테고리, 태그)은 springdoc이 정적으로
+	// 반영하지 않는다 — 이 프로젝트의 어떤 컨트롤러도 @SecurityRequirements 같은 per-operation
+	// 어노테이션을 쓰지 않아서, OpenAPI 문서상 security는 전역 bearerAuth 하나로 고정된다(실제
+	// 인증 요구 여부는 SecurityConfig가 런타임에 판정 — 세 번째 테스트가 그 경로를 검증한다).
 	private fun assertDocumentedPaths(document: JsonNode) {
 		val paths = document.path("paths")
 		val documentedPaths = paths.fieldNames().asSequence().toSet()
@@ -90,55 +98,39 @@ class OpenApiDocumentationIntegrationTest(
 		assertFalse("/api/ping" in documentedPaths)
 
 		listOf(
-			"/api/v1/auth/token/exchange",
-			"/api/v1/users/me/profile",
-			"/api/v1/users/me/profile-image/complete",
-			"/api/v1/travels",
-			"/api/v1/countries",
-			"/api/v1/places/search",
-			"/api/v1/travels/{travelId}/timeline-items",
-			"/api/v1/travels/{travelId}/routes",
-			"/api/v1/travels/{travelId}/members",
+			"/api/v1/community/categories",
+			"/api/v1/community/tags",
+			"/api/v1/community/posts",
+			"/api/v1/community/posts/{postId}",
+			"/api/v1/community/posts/{postId}/reactions/{type}",
+			"/api/v1/community/posts/{postId}/comments",
+			"/api/v1/community/comments/{commentId}",
+			"/api/v1/community/comments/{commentId}/reactions/{type}",
+			"/api/v1/community/me/posts",
+			"/api/v1/community/me/comments",
 		).forEach { path -> assertTrue(path in documentedPaths, "Missing documented path: $path") }
 
-		assertTrue(document.path("components").path("schemas").has("TravelCreateRequest"))
-		assertTrue(document.path("components").path("schemas").has("ProfileImageUploadCompleteRequest"))
-	}
-
-	private fun assertAuthenticationContracts(document: JsonNode) {
-		val exchangeSecurity = document.path("paths")
-			.path("/api/v1/auth/token/exchange")
-			.path("post")
-			.path("security")
-		assertTrue(exchangeSecurity.isArray)
-		assertTrue(exchangeSecurity.isEmpty)
-
-		val oauthSecurity = document.path("paths")
-			.path("/api/v1/auth/oauth2/{provider}")
-			.path("get")
-			.path("security")
-		assertTrue(oauthSecurity.isArray)
-		assertTrue(oauthSecurity.isEmpty)
-
-		val logout = document.path("paths").path("/api/v1/auth/logout").path("post")
-		assertFalse(logout.has("security"))
+		assertTrue(document.path("components").path("schemas").has("CommunityPostCreateRequest"))
+		assertTrue(document.path("components").path("schemas").has("CommentCreateRequest"))
 	}
 
 	private fun assertRequestParameters(document: JsonNode) {
-		val travelParameters = document.path("paths")
-			.path("/api/v1/travels")
+		// AuthenticationPrincipalOperationCustomizer가 @AuthenticationPrincipal 파라미터를
+		// 문서에서 걸러내는지(principal 노출 금지) 확인한다.
+		val listParameters = document.path("paths")
+			.path("/api/v1/community/posts")
 			.path("get")
 			.path("parameters")
 			.mapNotNull { it.path("name").textValue() }
-		assertFalse("principal" in travelParameters)
-		assertTrue("keyword" in travelParameters)
+		assertFalse("principal" in listParameters)
+		assertTrue("keyword" in listParameters)
 
-		val refreshCookie = document.path("paths")
-			.path("/api/v1/auth/token/refresh")
-			.path("post")
+		val detailParameters = document.path("paths")
+			.path("/api/v1/community/posts/{postId}")
+			.path("get")
 			.path("parameters")
-			.firstOrNull { it.path("name").asText() == "refresh_token" }
-		assertNotNull(refreshCookie)
-		assertEquals("cookie", refreshCookie.path("in").asText())
+			.mapNotNull { it.path("name").textValue() }
+		assertFalse("principal" in detailParameters)
+		assertTrue("postId" in detailParameters)
 	}
 }
