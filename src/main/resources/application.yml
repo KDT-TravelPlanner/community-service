@@ -5,6 +5,12 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/travel_diary_dev}
     username: ${SPRING_DATASOURCE_USERNAME:travel_diary}
     password: ${SPRING_DATASOURCE_PASSWORD:travel_diary_password}
+    hikari:
+      # hibernate.default_schema는 Hibernate가 만드는 SQL(JPQL 기반 쿼리, DDL 검증)에만 적용되고,
+      # @Query(nativeQuery = true)로 직접 쓴 SQL이나 JdbcTemplate 같은 raw JDBC 호출에는 전혀
+      # 영향을 주지 않는다 — 이 프로젝트는 조회수/좋아요/마이페이지 등 상당수가 네이티브 쿼리라
+      # search_path 자체를 커넥션 레벨에서 고정해야 "relation does not exist"가 나지 않는다.
+      connection-init-sql: SET search_path TO community
   flyway:
     schemas: community
     default-schema: community

@@ -44,7 +44,9 @@ spec:
               value: "http://travel:8080"
             # community-config의 SPRING_DATASOURCE_URL(스키마 없음)을 여기서 덮어쓴다 — env:는
             # envFrom(ConfigMap)보다 우선순위가 높다. 하나의 PostgreSQL 안에서 스키마로 서비스
-            # 경계를 강제한다(배경 절 참고).
+            # 경계를 강제한다(배경 절 참고). 실제 search_path 강제는
+            # application.yml의 spring.datasource.hikari.connection-init-sql이 커넥션 레벨에서
+            # 하고, 이 currentSchema는 그와 별개로 보조하는 용도(둘 다 있어도 충돌하지 않음).
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://postgres:5432/travel_diary_dev?currentSchema=community"
             - name: SPRING_DATASOURCE_USERNAME
