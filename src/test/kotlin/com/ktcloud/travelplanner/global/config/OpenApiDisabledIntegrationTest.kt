@@ -1,6 +1,6 @@
 package com.ktcloud.travelplanner.global.config
 
-import com.ktcloud.travelplanner.TravelPlannerBackendApplication
+import com.ktcloud.travelplanner.CommunityServiceApplication
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -13,7 +13,7 @@ import org.springframework.test.web.servlet.get
 
 @ActiveProfiles("test")
 @SpringBootTest(
-	classes = [TravelPlannerBackendApplication::class],
+	classes = [CommunityServiceApplication::class],
 	properties = [
 		"springdoc.api-docs.enabled=false",
 		"springdoc.swagger-ui.enabled=false",

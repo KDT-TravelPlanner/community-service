@@ -1,7 +1,6 @@
 package com.ktcloud.travelplanner.community.model
 
 import com.ktcloud.travelplanner.global.model.BaseTimeEntity
-import com.ktcloud.travelplanner.user.model.User
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -24,9 +23,10 @@ import java.util.UUID
 class CommunityPost(
 	@Id
 	val id: UUID = UUID.randomUUID(),
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "author_id", nullable = false)
-	val author: User,
+	@Column(name = "author_id", nullable = false)
+	val authorId: UUID,
+	authorNickname: String?,
+	authorProfileImageUrl: String?,
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "category_id", nullable = false)
 	var category: CommunityCategory,
@@ -36,6 +36,16 @@ class CommunityPost(
 	sourceTravelId: UUID?,
 	itinerarySnapshotJson: String?,
 ) : BaseTimeEntity() {
+	// 작성 시점에 Identity로부터 1회 조회해 저장하는 스냅샷 — 목록/상세 조회에서는 다시 조회하지 않는다
+	// (author_id로 재조회하지 않음). 작성자가 나중에 닉네임을 바꿔도 기존 글은 작성 당시 값을 유지한다.
+	@Column(name = "author_nickname", length = 30)
+	var authorNickname: String? = authorNickname
+		protected set
+
+	@Column(name = "author_profile_image_url", columnDefinition = "TEXT")
+	var authorProfileImageUrl: String? = authorProfileImageUrl
+		protected set
+
 	@Column(nullable = false, length = 200)
 	var title: String = title
 		protected set

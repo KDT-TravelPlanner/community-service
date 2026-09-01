@@ -19,10 +19,8 @@ data class CommentResponse(
 	val isMine: Boolean,
 ) {
 	companion object {
-		// 목록 조회(getComments) 전용 — CommunityCommentRepository가 이미 JOIN FETCH로 author를
-		// 같이 가져오므로, 여기서 Port를 거치면 댓글 수만큼 N+1 조회가 생긴다. 그래서 이 경로는
-		// 의도적으로 엔티티에서 직접 읽는다(MSA 분리 시 목록 API의 배치 조회 최적화가 별도 필요 —
-		// docs/msa-implementation-plan.md 참고).
+		// 목록 조회(getComments) 전용 — authorNickname/authorProfileImageUrl은 작성 시점에 저장된
+		// 스냅샷 컬럼이라 Port를 거치지 않고 엔티티에서 바로 읽는다(Identity 호출 없음).
 		fun from(
 			comment: CommunityComment,
 			isMine: Boolean,
@@ -30,8 +28,8 @@ data class CommentResponse(
 			isReacted: Boolean,
 		): CommentResponse = CommentResponse(
 			commentId = comment.id,
-			authorNickname = comment.author.nickname,
-			authorProfileImageUrl = comment.author.profileImageUrl,
+			authorNickname = comment.authorNickname,
+			authorProfileImageUrl = comment.authorProfileImageUrl,
 			content = comment.content,
 			createdAt = comment.createdAt,
 			updatedAt = comment.updatedAt,

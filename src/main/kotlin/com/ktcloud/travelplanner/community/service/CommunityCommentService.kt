@@ -13,7 +13,6 @@ import com.ktcloud.travelplanner.global.exception.ErrorCode
 import com.ktcloud.travelplanner.global.response.PageResponse
 import com.ktcloud.travelplanner.global.util.toExclusiveEndOfDayInstant
 import com.ktcloud.travelplanner.global.util.toStartOfDayInstant
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -25,9 +24,6 @@ import java.util.UUID
 class CommunityCommentService(
 	private val communityPostRepository: CommunityPostRepository,
 	private val communityCommentRepository: CommunityCommentRepository,
-	// 댓글 생성 시 CommunityComment.author: User 엔티티 관계를 채우는 데 필요 — 이번 스코프에서
-	// 엔티티를 authorId: UUID로 바꾸지 않기로 했으므로 직접 유지 (CommunityPostService와 동일 사유).
-	private val userRepository: UserRepository,
 	private val userLookupPort: UserLookupPort,
 ) {
 	// community-api-contract.md 2절 — 댓글 목록. 단일 depth, 페이지네이션 없음, 인증 불필요.
@@ -56,7 +52,7 @@ class CommunityCommentService(
 		return comments.map { comment ->
 			CommentResponse.from(
 				comment = comment,
-				isMine = requesterId != null && requesterId == comment.author.id,
+				isMine = requesterId != null && requesterId == comment.authorId,
 				reactionCount = reactionCounts[comment.id] ?: 0L,
 				isReacted = comment.id in reactedCommentIds,
 			)
@@ -70,17 +66,17 @@ class CommunityCommentService(
 		request: CommentCreateRequest,
 	): CommentResponse {
 		val post = communityPostRepository.findById(postId).orElseThrow(::CommunityPostNotFoundException)
-		val author = userRepository.findById(authorId).orElseThrow(::CommunityCommentAuthorNotFoundException)
+		val author = userLookupPort.findAuthor(authorId) ?: throw CommunityCommentAuthorNotFoundException()
 
 		val comment = CommunityComment(
 			post = post,
-			author = author,
+			authorId = authorId,
+			authorNickname = author.nickname,
+			authorProfileImageUrl = author.profileImageUrl,
 			content = request.content,
 		)
 		val saved = communityCommentRepository.save(comment)
-		// author 엔티티를 이미 로딩했으니 Port를 다시 호출하지 않고 그대로 AuthorSummary로 변환한다.
-		val authorSummary = AuthorSummary(id = authorId, nickname = author.nickname, profileImageUrl = author.profileImageUrl)
-		return CommentResponse.from(saved, authorSummary, isMine = true, reactionCount = 0, isReacted = false)
+		return CommentResponse.from(saved, author, isMine = true, reactionCount = 0, isReacted = false)
 	}
 
 	// PATCH /comments/{commentId} — 작성자 본인만, 내용만 바꿀 수 있다(카테고리/게시글 이동 없음).
@@ -91,14 +87,15 @@ class CommunityCommentService(
 		request: CommentCreateRequest,
 	): CommentResponse {
 		val comment = communityCommentRepository.findById(commentId).orElseThrow(::CommunityCommentNotFoundException)
-		if (comment.author.id != requesterId) {
+		if (comment.authorId != requesterId) {
 			throw CommunityCommentAccessDeniedException()
 		}
 		comment.edit(request.content, Instant.now())
 
 		val reactionCount = communityCommentRepository.countReactions(commentId)
 		val isReacted = communityCommentRepository.existsReaction(commentId, requesterId)
-		val author = userLookupPort.findAuthor(requireNotNull(comment.author.id))
+		// 작성 시점 스냅샷 컬럼을 그대로 쓴다 — 수정 경로도 Identity를 호출하지 않는다.
+		val author = AuthorSummary(id = comment.authorId, nickname = comment.authorNickname, profileImageUrl = comment.authorProfileImageUrl)
 		return CommentResponse.from(comment, author, isMine = true, reactionCount = reactionCount, isReacted = isReacted)
 	}
 
@@ -109,7 +106,7 @@ class CommunityCommentService(
 		requesterId: UUID,
 	) {
 		val comment = communityCommentRepository.findById(commentId).orElseThrow(::CommunityCommentNotFoundException)
-		if (comment.author.id != requesterId) {
+		if (comment.authorId != requesterId) {
 			throw CommunityCommentAccessDeniedException()
 		}
 		comment.softDelete(Instant.now())
@@ -137,11 +134,12 @@ class CommunityCommentService(
 		}
 
 		val reactionCount = communityCommentRepository.countReactions(commentId)
-		val author = userLookupPort.findAuthor(requireNotNull(comment.author.id))
+		// 작성 시점 스냅샷 컬럼을 그대로 쓴다 — 좋아요 토글 경로도 Identity를 호출하지 않는다.
+		val author = AuthorSummary(id = comment.authorId, nickname = comment.authorNickname, profileImageUrl = comment.authorProfileImageUrl)
 		return CommentResponse.from(
 			comment = comment,
 			author = author,
-			isMine = requesterId == comment.author.id,
+			isMine = requesterId == comment.authorId,
 			reactionCount = reactionCount,
 			isReacted = !alreadyReacted,
 		)

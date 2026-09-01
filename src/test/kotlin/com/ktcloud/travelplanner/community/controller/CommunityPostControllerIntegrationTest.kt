@@ -1,23 +1,17 @@
 package com.ktcloud.travelplanner.community.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.ktcloud.travelplanner.community.model.CommunityCategory
 import com.ktcloud.travelplanner.community.model.CommunityPost
 import com.ktcloud.travelplanner.community.model.CommunityTag
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.repository.CommunityCategoryRepository
 import com.ktcloud.travelplanner.community.repository.CommunityPostRepository
 import com.ktcloud.travelplanner.community.repository.CommunityTagRepository
 import com.ktcloud.travelplanner.global.security.JwtTokenService
-import com.ktcloud.travelplanner.membership.model.TravelInvitationAction
-import com.ktcloud.travelplanner.membership.model.TravelMember
-import com.ktcloud.travelplanner.membership.model.TravelRole
-import com.ktcloud.travelplanner.membership.repository.TravelMemberRepository
+import com.ktcloud.travelplanner.testsupport.FakeExternalPortsConfiguration
+import com.ktcloud.travelplanner.testsupport.FakeTravelAccessPort
+import com.ktcloud.travelplanner.testsupport.FakeUserLookupPort
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
-import com.ktcloud.travelplanner.travel.model.Travel
-import com.ktcloud.travelplanner.travel.repository.TravelRepository
-import com.ktcloud.travelplanner.user.model.OAuthProvider
-import com.ktcloud.travelplanner.user.model.User
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import jakarta.persistence.EntityManager
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.notNullValue
@@ -40,7 +34,6 @@ import org.springframework.test.web.servlet.put
 import org.springframework.transaction.annotation.Transactional
 import java.sql.Timestamp
 import java.time.Instant
-import java.time.LocalDate
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -48,13 +41,12 @@ import kotlin.test.assertTrue
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FakeExternalPortsConfiguration::class)
 @Transactional
 class CommunityPostControllerIntegrationTest(
 	@Autowired private val mockMvc: MockMvc,
-	@Autowired private val userRepository: UserRepository,
-	@Autowired private val travelRepository: TravelRepository,
-	@Autowired private val travelMemberRepository: TravelMemberRepository,
+	@Autowired private val fakeUserLookupPort: FakeUserLookupPort,
+	@Autowired private val fakeTravelAccessPort: FakeTravelAccessPort,
 	@Autowired private val communityPostRepository: CommunityPostRepository,
 	@Autowired private val communityCategoryRepository: CommunityCategoryRepository,
 	@Autowired private val communityTagRepository: CommunityTagRepository,
@@ -68,7 +60,7 @@ class CommunityPostControllerIntegrationTest(
 	@Test
 	fun `authenticated user creates a travel review post and links find-or-create tags`() {
 		val author = saveUser("author")
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(author.id)).value
+		val accessToken = jwtTokenService.issueAccessToken(author.id).value
 		communityTagRepository.saveAndFlush(CommunityTag(name = "부산"))
 
 		val result = mockMvc.post("/api/v1/community/posts") {
@@ -113,7 +105,7 @@ class CommunityPostControllerIntegrationTest(
 	@Test
 	fun `creates a post under a non-TRAVEL_REVIEW active category such as FREE`() {
 		val author = saveUser("free-author")
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(author.id)).value
+		val accessToken = jwtTokenService.issueAccessToken(author.id).value
 
 		mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -131,7 +123,7 @@ class CommunityPostControllerIntegrationTest(
 	@Test
 	fun `NOTICE category is rejected`() {
 		val author = saveUser("scope-author")
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(author.id)).value
+		val accessToken = jwtTokenService.issueAccessToken(author.id).value
 
 		mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -149,7 +141,7 @@ class CommunityPostControllerIntegrationTest(
 	@Test
 	fun `bodyJson outside the tiptap whitelist is rejected with 400`() {
 		val author = saveUser("body-author")
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(author.id)).value
+		val accessToken = jwtTokenService.issueAccessToken(author.id).value
 
 		mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -166,10 +158,9 @@ class CommunityPostControllerIntegrationTest(
 
 	@Test
 	fun `sourceTravelId is rejected with 403 when the requester has no accepted access`() {
-		val owner = saveUser("owner")
 		val outsider = saveUser("outsider")
-		val travel = saveTravel(owner)
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(outsider.id)).value
+		val travelId = createTravel()
+		val accessToken = jwtTokenService.issueAccessToken(outsider.id).value
 
 		mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -179,7 +170,7 @@ class CommunityPostControllerIntegrationTest(
 					"categoryCode": "TRAVEL_REVIEW",
 					"title": "t",
 					"bodyJson": {"type":"doc"},
-					"sourceTravelId": "${travel.id}"
+					"sourceTravelId": "$travelId"
 				}
 			""".trimIndent()
 		}
@@ -193,18 +184,9 @@ class CommunityPostControllerIntegrationTest(
 
 	@Test
 	fun `sourceTravelId is accepted for a member with accepted read access`() {
-		val owner = saveUser("owner2")
 		val member = saveUser("member2")
-		val travel = saveTravel(owner)
-		val travelMember = TravelMember(
-			travel = travel,
-			user = member,
-			role = TravelRole.READ_ONLY,
-			invitedAt = Instant.now(),
-		)
-		travelMember.respond(TravelInvitationAction.ACCEPT, Instant.now())
-		travelMemberRepository.saveAndFlush(travelMember)
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(member.id)).value
+		val travelId = createTravel(member)
+		val accessToken = jwtTokenService.issueAccessToken(member.id).value
 
 		mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -214,13 +196,13 @@ class CommunityPostControllerIntegrationTest(
 					"categoryCode": "TRAVEL_REVIEW",
 					"title": "동행 후기",
 					"bodyJson": {"type":"doc"},
-					"sourceTravelId": "${travel.id}"
+					"sourceTravelId": "$travelId"
 				}
 			""".trimIndent()
 		}
 			.andExpect { status { isOk() } }
 
-		assertTrue(communityPostRepository.findAll().any { it.sourceTravelId == travel.id })
+		assertTrue(communityPostRepository.findAll().any { it.sourceTravelId == travelId })
 	}
 
 	@Test
@@ -229,8 +211,8 @@ class CommunityPostControllerIntegrationTest(
 		// (day별 장소 목록 + 좌표)을 프론트가 작성 시점에 조립해서 보내는 불변 값이다 — 백엔드는
 		// 화이트리스트 검증 없이 그대로 저장/반환만 한다([[project_community_itinerary_snapshot]]).
 		val author = saveUser("snapshot-author")
-		val accessToken = jwtTokenService.issueAccessToken(requireNotNull(author.id)).value
-		val travel = saveTravel(author)
+		val accessToken = jwtTokenService.issueAccessToken(author.id).value
+		val travelId = createTravel(author)
 
 		val result = mockMvc.post("/api/v1/community/posts") {
 			header(HttpHeaders.AUTHORIZATION, "Bearer $accessToken")
@@ -240,7 +222,7 @@ class CommunityPostControllerIntegrationTest(
 					"categoryCode": "TRAVEL_REVIEW",
 					"title": "스냅샷 포함 후기",
 					"bodyJson": {"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"자유 작성"}]}]},
-					"sourceTravelId": "${travel.id}",
+					"sourceTravelId": "$travelId",
 					"itinerarySnapshotJson": {
 						"title": "제주도 여행",
 						"startDate": "2026-01-01",
@@ -576,8 +558,8 @@ class CommunityPostControllerIntegrationTest(
 
 	@Test
 	fun `list endpoint keyword search respects searchScope (TITLE, AUTHOR, CONTENT, TAG, ALL)`() {
-		val author1 = saveUserWithNickname("search-author1", "김바다")
-		val author2 = saveUserWithNickname("search-author2", "박여행")
+		val author1 = saveUserWithNickname("김바다")
+		val author2 = saveUserWithNickname("박여행")
 
 		val titleMatch = savePost(author2, title = "부산 여행 후기 대박", bodyPreview = "평범한 본문입니다")
 		val authorMatch = savePost(author1, title = "일반 제목", bodyPreview = "평범한 본문입니다")
@@ -718,11 +700,11 @@ class CommunityPostControllerIntegrationTest(
 		}
 	}
 
-	private fun bearer(user: User): String =
-		"Bearer ${jwtTokenService.issueAccessToken(requireNotNull(user.id)).value}"
+	private fun bearer(author: AuthorSummary): String =
+		"Bearer ${jwtTokenService.issueAccessToken(author.id).value}"
 
 	private fun savePost(
-		author: User,
+		author: AuthorSummary,
 		tags: Set<String> = emptySet(),
 		title: String = "상세 조회 테스트",
 		categoryCode: String = "TRAVEL_REVIEW",
@@ -733,7 +715,9 @@ class CommunityPostControllerIntegrationTest(
 			"""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"본문"}]}]}""",
 		)
 		val post = CommunityPost(
-			author = author,
+			authorId = author.id,
+			authorNickname = author.nickname,
+			authorProfileImageUrl = author.profileImageUrl,
 			category = category,
 			title = title,
 			bodyJson = bodyJson.toString(),
@@ -745,14 +729,8 @@ class CommunityPostControllerIntegrationTest(
 		return communityPostRepository.saveAndFlush(post)
 	}
 
-	private fun saveUserWithNickname(
-		suffix: String,
-		nickname: String,
-	): User {
-		val user = saveUser(suffix)
-		user.assignGeneratedNickname(nickname)
-		return userRepository.saveAndFlush(user)
-	}
+	private fun saveUserWithNickname(nickname: String): AuthorSummary =
+		fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = nickname)
 
 	private fun setCreatedAt(
 		postId: UUID,
@@ -767,21 +745,14 @@ class CommunityPostControllerIntegrationTest(
 		return communityTagRepository.findByName(name)!!
 	}
 
-	private fun saveUser(suffix: String): User = userRepository.saveAndFlush(
-		User(
-			provider = OAuthProvider.GOOGLE,
-			providerUserId = "community-$suffix-${UUID.randomUUID()}",
-			email = "$suffix@example.com",
-			name = suffix,
-		),
-	)
+	private fun saveUser(suffix: String): AuthorSummary =
+		fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = suffix)
 
-	private fun saveTravel(owner: User): Travel = travelRepository.saveAndFlush(
-		Travel(
-			owner = owner,
-			title = "테스트 여행",
-			startDate = LocalDate.parse("2026-08-01"),
-			endDate = LocalDate.parse("2026-08-04"),
-		),
-	)
+	// exists=true로 등록하고, readerIds에 넘긴 사용자만 hasReadAccess=true가 되도록 한다
+	// (실제 JpaTravelAccessAdapter의 "오너이거나 ACCEPTED 멤버" 판정을 테스트에서 직접 흉내낸다).
+	private fun createTravel(vararg readers: AuthorSummary): UUID {
+		val travelId = UUID.randomUUID()
+		fakeTravelAccessPort.registerTravel(travelId, *readers.map { it.id }.toTypedArray())
+		return travelId
+	}
 }

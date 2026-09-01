@@ -2,14 +2,14 @@ package com.ktcloud.travelplanner.community.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.ktcloud.travelplanner.community.model.CommunityPost
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.repository.CommunityCategoryRepository
 import com.ktcloud.travelplanner.community.repository.CommunityCommentRepository
 import com.ktcloud.travelplanner.community.repository.CommunityPostRepository
 import com.ktcloud.travelplanner.global.security.JwtTokenService
+import com.ktcloud.travelplanner.testsupport.FakeExternalPortsConfiguration
+import com.ktcloud.travelplanner.testsupport.FakeUserLookupPort
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
-import com.ktcloud.travelplanner.user.model.OAuthProvider
-import com.ktcloud.travelplanner.user.model.User
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import jakarta.persistence.EntityManager
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.notNullValue
@@ -35,11 +35,11 @@ import java.util.UUID
 @ActiveProfiles("test")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, FakeExternalPortsConfiguration::class)
 @Transactional
 class MyCommunityControllerIntegrationTest(
 	@Autowired private val mockMvc: MockMvc,
-	@Autowired private val userRepository: UserRepository,
+	@Autowired private val fakeUserLookupPort: FakeUserLookupPort,
 	@Autowired private val communityPostRepository: CommunityPostRepository,
 	@Autowired private val communityCommentRepository: CommunityCommentRepository,
 	@Autowired private val communityCategoryRepository: CommunityCategoryRepository,
@@ -93,7 +93,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me posts includeDeleted=true includes the requester's own soft deleted posts with deletedAt set`() {
-		val requester = saveUser("me-posts-include-deleted-requester")
+		val requester = saveUser("me-posts-include-deleted-req")
 		val kept = savePost(requester, "안 지운 글")
 		val deleted = savePost(requester, "내가 지운 글")
 		setCreatedAt(kept.id, Instant.parse("2026-08-01T00:00:00Z"))
@@ -193,7 +193,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me comments hides comments on a soft deleted post by default`() {
-		val requester = saveUser("me-comments-deleted-post-requester")
+		val requester = saveUser("me-comments-deleted-post-req")
 		val post = savePost(requester, "곧 삭제될 글")
 
 		mockMvc.post("/api/v1/community/posts/${post.id}/comments") {
@@ -232,7 +232,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me comments hides the requester's own soft deleted comment by default`() {
-		val requester = saveUser("me-comments-own-deleted-requester")
+		val requester = saveUser("me-comments-own-deleted-req")
 		val post = savePost(requester, "댓글 달릴 글")
 
 		val response = mockMvc.post("/api/v1/community/posts/${post.id}/comments") {
@@ -310,20 +310,14 @@ class MyCommunityControllerIntegrationTest(
 		entityManager.clear()
 	}
 
-	private fun bearer(user: User): String =
-		"Bearer ${jwtTokenService.issueAccessToken(requireNotNull(user.id)).value}"
+	private fun bearer(author: AuthorSummary): String =
+		"Bearer ${jwtTokenService.issueAccessToken(author.id).value}"
 
-	private fun saveUser(suffix: String): User = userRepository.saveAndFlush(
-		User(
-			provider = OAuthProvider.GOOGLE,
-			providerUserId = "me-community-$suffix-${UUID.randomUUID()}",
-			email = "$suffix@example.com",
-			name = suffix,
-		),
-	)
+	private fun saveUser(suffix: String): AuthorSummary =
+		fakeUserLookupPort.register(id = UUID.randomUUID(), nickname = suffix)
 
 	private fun savePost(
-		author: User,
+		author: AuthorSummary,
 		title: String,
 	): CommunityPost {
 		val category = communityCategoryRepository.findByCodeAndIsActiveTrue("TRAVEL_REVIEW")!!
@@ -331,7 +325,9 @@ class MyCommunityControllerIntegrationTest(
 			"""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"본문"}]}]}""",
 		)
 		val post = CommunityPost(
-			author = author,
+			authorId = author.id,
+			authorNickname = author.nickname,
+			authorProfileImageUrl = author.profileImageUrl,
 			category = category,
 			title = title,
 			bodyJson = bodyJson.toString(),

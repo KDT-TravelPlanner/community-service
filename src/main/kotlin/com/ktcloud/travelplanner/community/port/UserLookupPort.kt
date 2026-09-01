@@ -2,10 +2,9 @@ package com.ktcloud.travelplanner.community.port
 
 import java.util.UUID
 
-// community가 user 도메인을 직접(Repository/Entity) 참조하지 않고 이 인터페이스로만 접근하게
-// 끊어두는 경계. 지금은 JpaUserLookupAdapter(같은 프로세스, UserRepository 그대로 사용)가
-// 구현체지만, Identity 서비스가 실제로 분리되면 이 인터페이스는 그대로 두고 구현체만
-// HTTP 클라이언트 기반으로 교체한다 — community 쪽 서비스 코드는 변경할 필요가 없다.
+// community가 Identity(user) 서비스를 직접(Repository/Entity) 참조하지 않고 이 인터페이스로만
+// 접근하게 끊어두는 경계. 구현체는 HttpUserLookupAdapter — GET /api/v1/users/{userId}/summary를
+// 호출한다. Identity API는 아직 미구현이라(계약만 확정) 실제 운영에서는 503이 날 수 있다.
 interface UserLookupPort {
 	fun findAuthor(userId: UUID): AuthorSummary?
 }

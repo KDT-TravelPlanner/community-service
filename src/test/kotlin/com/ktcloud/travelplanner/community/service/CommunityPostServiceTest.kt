@@ -13,12 +13,10 @@ import com.ktcloud.travelplanner.community.repository.CommunityPostRepository
 import com.ktcloud.travelplanner.community.repository.CommunityPostTagNameRow
 import com.ktcloud.travelplanner.community.repository.CommunityTagRepository
 import com.ktcloud.travelplanner.community.validation.InvalidBodyJsonException
+import com.ktcloud.travelplanner.community.port.AuthorSummary
 import com.ktcloud.travelplanner.community.port.TravelAccessPort
 import com.ktcloud.travelplanner.community.port.UserLookupPort
 import com.ktcloud.travelplanner.global.dto.PatchField
-import com.ktcloud.travelplanner.user.model.OAuthProvider
-import com.ktcloud.travelplanner.user.model.User
-import com.ktcloud.travelplanner.user.repository.UserRepository
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.ArgumentMatchers.any
@@ -43,7 +41,6 @@ class CommunityPostServiceTest {
 	private val communityCategoryRepository = mock(CommunityCategoryRepository::class.java)
 	private val communityTagRepository = mock(CommunityTagRepository::class.java)
 	private val communityPostRepository = mock(CommunityPostRepository::class.java)
-	private val userRepository = mock(UserRepository::class.java)
 	private val userLookupPort = mock(UserLookupPort::class.java)
 	private val travelAccessPort = mock(TravelAccessPort::class.java)
 	private val objectMapper = ObjectMapper()
@@ -51,14 +48,13 @@ class CommunityPostServiceTest {
 		communityCategoryRepository,
 		communityTagRepository,
 		communityPostRepository,
-		userRepository,
 		userLookupPort,
 		travelAccessPort,
 		objectMapper,
 	)
 
 	private val authorId = UUID.randomUUID()
-	private val author = User(OAuthProvider.GOOGLE, "community-author")
+	private val author = AuthorSummary(id = authorId, nickname = "community-author", profileImageUrl = null)
 	private val category = CommunityCategory(id = 1, code = "TRAVEL_REVIEW", name = "여행후기", sortOrder = 1, isActive = true)
 
 	// ArgumentMatchers.any(Class)는 자바 선언이라 런타임에 null을 반환한다. CommunityPost.softDelete
@@ -115,14 +111,14 @@ class CommunityPostServiceTest {
 			service.createPost(authorId, request(categoryCode = "NOTICE"))
 		}
 
-		verifyNoInteractions(communityCategoryRepository, userRepository, communityPostRepository)
+		verifyNoInteractions(communityCategoryRepository, userLookupPort, communityPostRepository)
 	}
 
 	@Test
 	fun `creates a post under any active non-NOTICE category`() {
 		val freeCategory = CommunityCategory(id = 2, code = "FREE", name = "자유게시판", sortOrder = 2, isActive = true)
 		`when`(communityCategoryRepository.findByCodeAndIsActiveTrue("FREE")).thenReturn(freeCategory)
-		`when`(userRepository.findById(authorId)).thenReturn(Optional.of(author))
+		`when`(userLookupPort.findAuthor(authorId)).thenReturn(author)
 		`when`(communityPostRepository.save(any(CommunityPost::class.java)))
 			.thenAnswer { it.getArgument<CommunityPost>(0) }
 
@@ -137,7 +133,7 @@ class CommunityPostServiceTest {
 			service.createPost(authorId, request(categoryCode = "QNA"))
 		}
 
-		verifyNoInteractions(userRepository, communityPostRepository)
+		verifyNoInteractions(userLookupPort, communityPostRepository)
 	}
 
 	@Test
@@ -248,7 +244,7 @@ class CommunityPostServiceTest {
 	@Test
 	fun `rejects an unknown author`() {
 		`when`(communityCategoryRepository.findByCodeAndIsActiveTrue("TRAVEL_REVIEW")).thenReturn(category)
-		`when`(userRepository.findById(authorId)).thenReturn(Optional.empty())
+		`when`(userLookupPort.findAuthor(authorId)).thenReturn(null)
 
 		assertThrows<CommunityPostAuthorNotFoundException> {
 			service.createPost(authorId, request())
@@ -627,14 +623,11 @@ class CommunityPostServiceTest {
 		postAuthorId: UUID,
 		viewCount: Int = 5,
 	): CommunityPost {
-		val postAuthor = mock(User::class.java)
-		`when`(postAuthor.id).thenReturn(postAuthorId)
-		`when`(postAuthor.nickname).thenReturn("작성자")
-		`when`(postAuthor.profileImageUrl).thenReturn(null)
-
 		val post = mock(CommunityPost::class.java)
 		`when`(post.id).thenReturn(postId)
-		`when`(post.author).thenReturn(postAuthor)
+		`when`(post.authorId).thenReturn(postAuthorId)
+		`when`(post.authorNickname).thenReturn("작성자")
+		`when`(post.authorProfileImageUrl).thenReturn(null)
 		`when`(post.category).thenReturn(category)
 		`when`(post.title).thenReturn("상세 테스트")
 		`when`(post.bodyPreview).thenReturn("미리보기")
@@ -651,12 +644,11 @@ class CommunityPostServiceTest {
 		postAuthorId: UUID,
 		version: Int = 0,
 	): CommunityPost {
-		val postAuthor = mock(User::class.java)
-		`when`(postAuthor.id).thenReturn(postAuthorId)
-
 		val post = mock(CommunityPost::class.java)
 		`when`(post.id).thenReturn(UUID.randomUUID())
-		`when`(post.author).thenReturn(postAuthor)
+		`when`(post.authorId).thenReturn(postAuthorId)
+		`when`(post.authorNickname).thenReturn("작성자")
+		`when`(post.authorProfileImageUrl).thenReturn(null)
 		`when`(post.category).thenReturn(category)
 		`when`(post.version).thenReturn(version)
 		`when`(post.title).thenReturn("기존 제목")
@@ -668,7 +660,7 @@ class CommunityPostServiceTest {
 
 	private fun stubAuthorAndCategory() {
 		`when`(communityCategoryRepository.findByCodeAndIsActiveTrue("TRAVEL_REVIEW")).thenReturn(category)
-		`when`(userRepository.findById(authorId)).thenReturn(Optional.of(author))
+		`when`(userLookupPort.findAuthor(authorId)).thenReturn(author)
 	}
 
 	private fun tiptapDoc(vararg paragraphs: String): JsonNode {

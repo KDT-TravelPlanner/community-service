@@ -1,1 +1,1 @@
-rootProject.name = "travel-planner-backend"
+rootProject.name = "travel-planner-community"

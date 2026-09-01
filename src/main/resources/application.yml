@@ -1,15 +1,19 @@
 spring:
   application:
-    name: travel-planner-backend
+    name: travel-planner-community
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/travel_diary_dev}
     username: ${SPRING_DATASOURCE_USERNAME:travel_diary}
     password: ${SPRING_DATASOURCE_PASSWORD:travel_diary_password}
-  data:
-    redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-      password: ${SPRING_DATA_REDIS_PASSWORD:travel_diary_redis_password}
+    hikari:
+      # hibernate.default_schema는 Hibernate가 만드는 SQL(JPQL 기반 쿼리, DDL 검증)에만 적용되고,
+      # @Query(nativeQuery = true)로 직접 쓴 SQL이나 JdbcTemplate 같은 raw JDBC 호출에는 전혀
+      # 영향을 주지 않는다 — 이 프로젝트는 조회수/좋아요/마이페이지 등 상당수가 네이티브 쿼리라
+      # search_path 자체를 커넥션 레벨에서 고정해야 "relation does not exist"가 나지 않는다.
+      connection-init-sql: SET search_path TO community
+  flyway:
+    schemas: community
+    default-schema: community
   jpa:
     hibernate:
       ddl-auto: validate
@@ -19,6 +23,7 @@ spring:
       hibernate:
         format_sql: false
         use_sql_comments: false
+        default_schema: community
   lifecycle:
     timeout-per-shutdown-phase: 20s
   devtools:
@@ -65,59 +70,13 @@ management:
       application: ${spring.application.name}
 
 app:
+  services:
+    identity:
+      base-url: ${IDENTITY_BASE_URL:http://identity:8080}
+    travel:
+      base-url: ${TRAVEL_BASE_URL:http://travel:8080}
   logging:
     error-frame-limit: 5
-  external:
-    google:
-      places:
-        api-key: ${GOOGLE_MAPS_API_KEY:}
-        base-url: ${GOOGLE_PLACES_BASE_URL:https://places.googleapis.com}
-        connect-timeout: ${GOOGLE_PLACES_CONNECT_TIMEOUT:2s}
-        read-timeout: ${GOOGLE_PLACES_READ_TIMEOUT:3s}
-      routes:
-        api-key: ${GOOGLE_MAPS_API_KEY:}
-        base-url: ${GOOGLE_ROUTES_BASE_URL:https://routes.googleapis.com}
-        connect-timeout: ${GOOGLE_ROUTES_CONNECT_TIMEOUT:2s}
-        read-timeout: ${GOOGLE_ROUTES_READ_TIMEOUT:5s}
-  storage:
-    profile-image:
-      enabled: ${PROFILE_IMAGE_STORAGE_ENABLED:false}
-      endpoint: ${PROFILE_IMAGE_STORAGE_ENDPOINT:}
-      region: ${PROFILE_IMAGE_STORAGE_REGION:ap-northeast-2}
-      access-key: ${PROFILE_IMAGE_STORAGE_ACCESS_KEY:}
-      secret-key: ${PROFILE_IMAGE_STORAGE_SECRET_KEY:}
-      bucket: ${PROFILE_IMAGE_STORAGE_BUCKET:}
-      public-base-url: ${PROFILE_IMAGE_PUBLIC_BASE_URL:}
-      path-style-access-enabled: ${PROFILE_IMAGE_STORAGE_PATH_STYLE_ACCESS_ENABLED:true}
-      upload-url-ttl: ${PROFILE_IMAGE_UPLOAD_URL_TTL:10m}
-  auth:
-    refresh-token:
-      ttl: ${REFRESH_TOKEN_TTL:30d}
-      cookie-secure: ${REFRESH_TOKEN_COOKIE_SECURE:false}
-      cookie-same-site: ${REFRESH_TOKEN_COOKIE_SAME_SITE:Lax}
-    oauth:
-      state-ttl: ${OAUTH_STATE_TTL:5m}
-      state-cookie-secure: false
-      exchange-code-ttl: ${OAUTH_EXCHANGE_CODE_TTL:60s}
-      allowed-redirect-origins: ${OAUTH_ALLOWED_REDIRECT_ORIGINS:http://localhost:3000}
-      frontend-redirect-url: ${OAUTH_FRONTEND_REDIRECT_URL:http://localhost:3000/auth/callback}
-      http-client:
-        connect-timeout: ${OAUTH_HTTP_CONNECT_TIMEOUT:3s}
-        read-timeout: ${OAUTH_HTTP_READ_TIMEOUT:5s}
-      google:
-        client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
-        client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
-        redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/auth/oauth2/google/callback}
-        authorization-uri: ${GOOGLE_OAUTH_AUTHORIZATION_URI:https://accounts.google.com/o/oauth2/v2/auth}
-        token-uri: ${GOOGLE_OAUTH_TOKEN_URI:https://oauth2.googleapis.com/token}
-        user-info-uri: ${GOOGLE_OAUTH_USER_INFO_URI:https://openidconnect.googleapis.com/v1/userinfo}
-      naver:
-        client-id: ${NAVER_OAUTH_CLIENT_ID:}
-        client-secret: ${NAVER_OAUTH_CLIENT_SECRET:}
-        redirect-uri: ${NAVER_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/auth/oauth2/naver/callback}
-        authorization-uri: ${NAVER_OAUTH_AUTHORIZATION_URI:https://nid.naver.com/oauth2.0/authorize}
-        token-uri: ${NAVER_OAUTH_TOKEN_URI:https://nid.naver.com/oauth2.0/token}
-        user-info-uri: ${NAVER_OAUTH_USER_INFO_URI:https://openapi.naver.com/v1/nid/me}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   security:
