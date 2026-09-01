@@ -8,7 +8,7 @@ plugins {
 
 group = "com.ktcloud"
 version = "0.0.1-SNAPSHOT"
-description = "Travel Planner backend"
+description = "Travel Planner community service backend"
 
 java {
 	toolchain {
@@ -23,7 +23,6 @@ repositories {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation("org.springframework.boot:spring-boot-starter-data-redis")
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.springframework.security:spring-security-oauth2-jose")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -32,10 +31,6 @@ dependencies {
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 	implementation("org.flywaydb:flyway-core")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
-	implementation(platform("software.amazon.awssdk:bom:2.47.3"))
-	implementation("software.amazon.awssdk:s3")
-	implementation("software.amazon.awssdk:sso")
-	implementation("software.amazon.awssdk:ssooidc")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	runtimeOnly("org.postgresql:postgresql")

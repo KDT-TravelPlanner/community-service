@@ -30,7 +30,7 @@ class PingControllerIntegrationTest(
 			.andExpect {
 				status { isOk() }
 				jsonPath("$.status", equalTo("ok"))
-				jsonPath("$.application", equalTo("travel-planner-backend"))
+				jsonPath("$.application", equalTo("travel-planner-community"))
 			}
 	}
 

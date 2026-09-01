@@ -2,7 +2,7 @@ package com.ktcloud.travelplanner.global.config
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.ktcloud.travelplanner.TravelPlannerBackendApplication
+import com.ktcloud.travelplanner.CommunityServiceApplication
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 
 @ActiveProfiles("test")
 @SpringBootTest(
-	classes = [TravelPlannerBackendApplication::class],
+	classes = [CommunityServiceApplication::class],
 	webEnvironment = SpringBootTest.WebEnvironment.MOCK,
 )
 @AutoConfigureMockMvc

@@ -9,8 +9,8 @@ import org.springframework.boot.runApplication
 @EnableConfigurationProperties(
 	JwtProperties::class,
 )
-class TravelPlannerBackendApplication
+class CommunityServiceApplication
 
 fun main(args: Array<String>) {
-	runApplication<TravelPlannerBackendApplication>(*args)
+	runApplication<CommunityServiceApplication>(*args)
 }

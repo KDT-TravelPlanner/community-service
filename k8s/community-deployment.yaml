@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: community
+  namespace: travel-planner
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: community
+  template:
+    metadata:
+      labels:
+        app: community
+    spec:
+      containers:
+        - name: community
+          image: travel-planner-community:kind-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: actuator
+              containerPort: 9091
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          envFrom:
+            - configMapRef:
+                name: community-config
+          env:
+            - name: IDENTITY_BASE_URL
+              value: "http://identity:8080"
+            - name: TRAVEL_BASE_URL
+              value: "http://travel:8080"
+            # community-config의 SPRING_DATASOURCE_URL(스키마 없음)을 여기서 덮어쓴다 — env:는
+            # envFrom(ConfigMap)보다 우선순위가 높다. 하나의 PostgreSQL 안에서 스키마로 서비스
+            # 경계를 강제한다(배경 절 참고).
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/travel_diary_dev?currentSchema=community"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: REDIS_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: JWT_SECRET
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: GOOGLE_OAUTH_CLIENT_ID
+                  optional: true
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: GOOGLE_OAUTH_CLIENT_SECRET
+                  optional: true
+            - name: NAVER_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: NAVER_OAUTH_CLIENT_ID
+                  optional: true
+            - name: NAVER_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: NAVER_OAUTH_CLIENT_SECRET
+                  optional: true
+            - name: GOOGLE_MAPS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: community-secret
+                  key: GOOGLE_MAPS_API_KEY
+                  optional: true
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: actuator
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: actuator
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10

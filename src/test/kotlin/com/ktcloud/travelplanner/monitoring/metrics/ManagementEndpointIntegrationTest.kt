@@ -1,6 +1,6 @@
 package com.ktcloud.travelplanner.monitoring.metrics
 
-import com.ktcloud.travelplanner.TravelPlannerBackendApplication
+import com.ktcloud.travelplanner.CommunityServiceApplication
 import com.ktcloud.travelplanner.testsupport.TestcontainersConfiguration
 import io.micrometer.core.instrument.MeterRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,7 +20,7 @@ import org.springframework.test.context.ActiveProfiles
 @ActiveProfiles("test")
 @AutoConfigureObservability
 @SpringBootTest(
-	classes = [TravelPlannerBackendApplication::class],
+	classes = [CommunityServiceApplication::class],
 	webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
 	properties = ["management.server.port=0"],
 )
