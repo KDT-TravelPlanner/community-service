@@ -93,7 +93,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me posts includeDeleted=true includes the requester's own soft deleted posts with deletedAt set`() {
-		val requester = saveUser("me-posts-include-deleted-requester")
+		val requester = saveUser("me-posts-include-deleted-req")
 		val kept = savePost(requester, "안 지운 글")
 		val deleted = savePost(requester, "내가 지운 글")
 		setCreatedAt(kept.id, Instant.parse("2026-08-01T00:00:00Z"))
@@ -193,7 +193,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me comments hides comments on a soft deleted post by default`() {
-		val requester = saveUser("me-comments-deleted-post-requester")
+		val requester = saveUser("me-comments-deleted-post-req")
 		val post = savePost(requester, "곧 삭제될 글")
 
 		mockMvc.post("/api/v1/community/posts/${post.id}/comments") {
@@ -232,7 +232,7 @@ class MyCommunityControllerIntegrationTest(
 
 	@Test
 	fun `GET me comments hides the requester's own soft deleted comment by default`() {
-		val requester = saveUser("me-comments-own-deleted-requester")
+		val requester = saveUser("me-comments-own-deleted-req")
 		val post = savePost(requester, "댓글 달릴 글")
 
 		val response = mockMvc.post("/api/v1/community/posts/${post.id}/comments") {
