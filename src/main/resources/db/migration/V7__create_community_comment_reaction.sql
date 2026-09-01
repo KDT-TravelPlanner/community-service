@@ -5,8 +5,6 @@ CREATE TABLE community_comment_reaction (
     CONSTRAINT pk_community_comment_reaction PRIMARY KEY (comment_id, user_id, type),
     CONSTRAINT fk_community_comment_reaction_comment FOREIGN KEY (comment_id)
         REFERENCES community_comment (id) ON DELETE CASCADE,
-    CONSTRAINT fk_community_comment_reaction_user FOREIGN KEY (user_id)
-        REFERENCES user_table (id) ON DELETE CASCADE,
     CONSTRAINT ck_community_comment_reaction_type CHECK (type IN ('LIKE'))
 );
 
