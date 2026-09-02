@@ -2,7 +2,6 @@ package com.ktcloud.travelplanner.community.adapter
 
 import com.ktcloud.travelplanner.community.port.TravelAccessPort
 import com.ktcloud.travelplanner.global.exception.TravelServiceUnavailableException
-import org.springframework.http.HttpHeaders
 import org.springframework.stereotype.Component
 import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
@@ -13,6 +12,8 @@ import java.util.UUID
 // hasReadAccess 둘 다 판정한다(Travel 쪽 계약: 200=존재+읽기권한 있음, 403=존재하지만 권한 없음,
 // 404=존재하지 않음). requesterId는 URL에 싣지 않고, 들어온 요청의 Authorization 헤더를 그대로
 // 전달해 Travel이 토큰에서 요청자를 직접 식별하게 한다 — 팀 확정 결정사항 4(구현 완료, 사용 가능).
+// X-Request-Id도 함께 넘겨 두 서비스의 로그가 하나의 사용자 요청으로 묶이게 한다
+// (applyIncomingRequestContext).
 //
 // 실패·타임아웃 시 절대 false를 반환하지 않는다. 권한 확인 자체가 불가능한 상태를 "권한 없음"으로
 // 뭉개면, 실제로는 접근 가능한 사용자가 부당하게 403을 받게 된다 — 그 대신 예외를 던져 503으로
@@ -29,11 +30,10 @@ class HttpTravelAccessAdapter(
 	): Boolean = fetchReadAccessStatus(travelId) == ReadAccessStatus.FOUND_WITH_ACCESS
 
 	private fun fetchReadAccessStatus(travelId: UUID): ReadAccessStatus {
-		val authorization = currentAuthorizationHeader()
 		return try {
 			travelRestClient.get()
 				.uri("/api/v1/travels/{travelId}/read-access", travelId)
-				.headers { headers -> authorization?.let { headers.set(HttpHeaders.AUTHORIZATION, it) } }
+				.headers { headers -> headers.applyIncomingRequestContext() }
 				.retrieve()
 				.toBodilessEntity()
 			ReadAccessStatus.FOUND_WITH_ACCESS
