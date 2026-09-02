@@ -25,8 +25,8 @@ class HttpUserLookupAdapter(
 				.uri("/api/v1/users/{userId}/summary", userId)
 				.headers { headers -> headers.applyIncomingRequestContext() }
 				.retrieve()
-				.body(UserSummaryResponse::class.java)
-			response?.let {
+				.body(UserSummaryEnvelope::class.java)
+			response?.data?.let {
 				AuthorSummary(id = it.userId, nickname = it.nickname, profileImageUrl = it.profileImageUrl)
 			}
 		} catch (exception: HttpClientErrorException.NotFound) {
@@ -38,6 +38,11 @@ class HttpUserLookupAdapter(
 		}
 	}
 }
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+private data class UserSummaryEnvelope(
+	val data: UserSummaryResponse?,
+)
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 private data class UserSummaryResponse(

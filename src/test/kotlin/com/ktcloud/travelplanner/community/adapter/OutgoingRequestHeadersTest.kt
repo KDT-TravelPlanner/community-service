@@ -41,7 +41,7 @@ class OutgoingRequestHeadersTest {
 			.andExpect(header(RequestIdGenerator.HEADER_NAME, INCOMING_REQUEST_ID))
 			.andRespond(
 				withSuccess(
-					"""{"userId":"$userId","nickname":"작성자","profileImageUrl":null}""",
+					"""{"data":{"userId":"$userId","nickname":"작성자","profileImageUrl":null}}""",
 					MediaType.APPLICATION_JSON,
 				),
 			)
@@ -86,7 +86,7 @@ class OutgoingRequestHeadersTest {
 			.andExpect(headerDoesNotExist(RequestIdGenerator.HEADER_NAME))
 			.andRespond(
 				withSuccess(
-					"""{"userId":"$userId","nickname":null,"profileImageUrl":null}""",
+					"""{"data":{"userId":"$userId","nickname":null,"profileImageUrl":null}}""",
 					MediaType.APPLICATION_JSON,
 				),
 			)
