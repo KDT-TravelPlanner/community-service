@@ -25,6 +25,10 @@ class RequestLoggingFilter(
 		response: HttpServletResponse,
 		filterChain: FilterChain,
 	) {
+		// 요청 ID는 언제나 이 서비스가 발급한다 — 들어온 X-Request-Id는 신뢰하지 않는다. 클라이언트가
+		// 보낸 값을 그대로 쓰면 로그를 위조할 수 있어서다(RequestLoggingIntegrationTest가 이 규칙을
+		// 고정한다). 발급한 값은 Identity/Travel 호출에 그대로 실어 보내 서비스 간 로그를 묶는다
+		// (IncomingRequestHeaders.applyIncomingRequestContext).
 		val requestId = requestIdGenerator.generate()
 		val startedAt = System.nanoTime()
 		var hasUnexpectedFailure = false

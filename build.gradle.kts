@@ -17,10 +17,26 @@ java {
 }
 
 repositories {
+	maven {
+		name = "GitHubPackages"
+		url = uri("https://maven.pkg.github.com/protove/travel-common")
+		credentials {
+			username = providers.gradleProperty("gpr.user")
+				.orElse(providers.environmentVariable("GITHUB_PACKAGES_USER"))
+				.orNull
+			password = providers.gradleProperty("gpr.key")
+				.orElse(providers.environmentVariable("GITHUB_PACKAGES_TOKEN"))
+				.orNull
+		}
+		content {
+			includeGroup("com.ktcloud.travelplanner")
+		}
+	}
 	mavenCentral()
 }
 
 dependencies {
+	implementation("com.ktcloud.travelplanner:travel-common:0.1.0")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-security")
