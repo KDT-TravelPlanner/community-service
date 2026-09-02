@@ -64,7 +64,12 @@ class OutgoingRequestHeadersTest {
 		server.expect(requestTo("$TRAVEL_BASE_URL/api/v1/travels/$travelId/read-access"))
 			.andExpect(header(HttpHeaders.AUTHORIZATION, BEARER_TOKEN))
 			.andExpect(header(RequestIdGenerator.HEADER_NAME, INCOMING_REQUEST_ID))
-			.andRespond(withSuccess())
+			.andRespond(
+				withSuccess(
+					"""{"data":{"travelId":"$travelId","exists":true,"hasReadAccess":true}}""",
+					MediaType.APPLICATION_JSON,
+				),
+			)
 
 		adapter.exists(travelId)
 
