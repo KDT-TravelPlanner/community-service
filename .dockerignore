@@ -1,9 +1,31 @@
-.gradle
-build
-.kotlin
+# Docker build context에서 제외할 것들.
+# Dockerfile이 복사하는 build/libs/app.jar 만 예외로 남긴다.
+
 .git
-.gitignore
-.env*
+.github
+.gradle
+.kotlin
 .idea
 *.iml
+src
+docs
+k8s
+docker
+gradle
+gradlew
+gradlew.bat
+build.gradle.kts
+settings.gradle.kts
+README.md
+*.md
 HELP.md
+.env
+.env.*
+logs
+
+# build 아래는 전부 제외하되 app.jar 만 통과시킨다.
+# (예외를 주려면 상위 디렉터리부터 순서대로 열어줘야 한다)
+build/*
+!build/libs/
+build/libs/*
+!build/libs/app.jar
