@@ -81,7 +81,7 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   security:
     jwt:
-      issuer: ${JWT_ISSUER:travel-planner-backend}
+      issuer: ${JWT_ISSUER:identity-service}
       access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:30m}
 
 logging:
