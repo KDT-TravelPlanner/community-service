@@ -1,0 +1,56 @@
+name: Community Main Release (Dev)
+
+# 모놀리스의 Main Release 흐름을 Community 서비스에 맞게 적용한다.
+# main 커밋은 검증(build.yml)을 먼저 통과해야만 ECR publish가 가능하다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: community-main-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify Community Release
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  publish:
+    name: Publish Community Image
+    needs: verify
+    uses: ./.github/workflows/publish-ecr.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+
+  release-summary:
+    name: Release Summary
+    needs: [verify, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write release summary
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          IMAGE_REF: ${{ needs.publish.outputs.image_ref }}
+        run: |
+          {
+            echo "### Community release result"
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| Verification | ${VERIFY_RESULT} |"
+            echo "| ECR image publish | ${PUBLISH_RESULT} |"
+            if [[ "${PUBLISH_RESULT}" == "success" ]]; then
+              echo
+              echo "Published image: \`${IMAGE_REF}\`"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

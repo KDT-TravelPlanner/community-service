@@ -77,7 +77,19 @@ tasks.withType<Test> {
 }
 
 tasks.named<Test>("test") {
-	exclude("**/*IntegrationTest.class")
+	exclude("**/*IntegrationTest.class", "**/community/adapter/**")
+}
+
+// HTTP 어댑터 테스트. Identity/Travel 응답 파싱·헤더 전달·503 승격을 고정한다.
+// CI가 "3단계 HTTP Adapter 테스트"로 따로 보여줄 수 있게 test 태스크에서 떼어냈다
+// (안 떼면 test에 이미 포함돼 같은 테스트를 두 번 돌린다).
+val adapterTest by tasks.registering(Test::class) {
+	description = "Runs HTTP adapter tests."
+	group = "verification"
+	testClassesDirs = sourceSets["test"].output.classesDirs
+	classpath = sourceSets["test"].runtimeClasspath
+	include("**/community/adapter/**")
+	shouldRunAfter(tasks.named("test"))
 }
 
 val integrationTest by tasks.registering(Test::class) {
@@ -90,7 +102,7 @@ val integrationTest by tasks.registering(Test::class) {
 }
 
 tasks.named("check") {
-	dependsOn(integrationTest)
+	dependsOn(integrationTest, adapterTest)
 }
 
 tasks.bootJar {

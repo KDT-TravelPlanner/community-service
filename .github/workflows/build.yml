@@ -1,20 +1,54 @@
-name: Build
+name: Community 도커 이미지 및 HTTP Adapter 검증
 
+# [트리거]
+#   pull_request  develop·main 으로 향하는 PR. 커밋이 추가될 때마다 다시 돈다.
+#                 브랜치 보호의 required check 는 여기서 나온다.
+#   push          작업 브랜치. PR 을 열기 전에도 검증을 받기 위함이다.
+#                 develop 은 넣지 않는다 — PR 에서 이미 검증한 코드를 머지 후 또 돌리지 않는다.
+#
+#   PR 이 열린 뒤에는 push 와 pull_request 가 같은 커밋을 각각 한 번씩 돌린다.
+#   concurrency 로는 안 막힌다(push 는 refs/heads/*, PR 은 refs/pull/*/merge 라 그룹이 다르다).
+#   알고 감수하는 비용이다.
 on:
+  # main 릴리스에서는 release-main-dev.yml이 이 검증을 재사용한 뒤,
+  # 성공했을 때만 ECR publish를 호출한다.
+  workflow_call:
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
   push:
     branches:
-      - develop
       - "codex/**"
+      - "SCRUM-*"
 
 permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: community-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # 컨테이너 기동 검증용 DB. 통합 테스트는 Testcontainers가 자기 것을 따로 띄우므로
+    # 이 postgres는 아래 "도커 컨테이너 기동" 단계에서만 쓰인다.
+    services:
+      postgres:
+        image: postgres:17.10-alpine
+        env:
+          POSTGRES_DB: travel_diary_dev
+          POSTGRES_USER: travel_diary
+          POSTGRES_PASSWORD: travel_diary_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U travel_diary -d travel_diary_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     steps:
       - name: Check out source
@@ -29,8 +63,112 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Build
+      - name: 1단계 단위 테스트
         env:
           GITHUB_PACKAGES_USER: ${{ secrets.COMMON_PACKAGES_USER }}
           GITHUB_PACKAGES_TOKEN: ${{ secrets.COMMON_PACKAGES_TOKEN }}
-        run: ./gradlew clean build
+        run: ./gradlew clean test --no-daemon
+
+      - name: 2단계 통합 테스트
+        env:
+          GITHUB_PACKAGES_USER: ${{ secrets.COMMON_PACKAGES_USER }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.COMMON_PACKAGES_TOKEN }}
+        run: ./gradlew integrationTest --no-daemon
+
+      - name: 3단계 HTTP Adapter 테스트
+        env:
+          GITHUB_PACKAGES_USER: ${{ secrets.COMMON_PACKAGES_USER }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.COMMON_PACKAGES_TOKEN }}
+        run: ./gradlew adapterTest --no-daemon
+
+      - name: 테스트 리포트 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests
+            build/test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Dockerfile이 단일 스테이지(app.jar만 COPY)라 이미지 빌드 전에 JAR이 있어야 한다.
+      - name: 애플리케이션 JAR 생성
+        env:
+          GITHUB_PACKAGES_USER: ${{ secrets.COMMON_PACKAGES_USER }}
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.COMMON_PACKAGES_TOKEN }}
+        run: ./gradlew bootJar --no-daemon
+
+      - name: 도커 이미지 빌드
+        run: docker build --tag community-service:ci .
+
+      # 배포되는 것과 같은 prod 프로필로 띄운다. prod는 JWT_SECRET에 기본값이 없어
+      # 값을 안 주면 기동 자체가 실패하므로 CI 전용 임시값을 넣는다.
+      - name: 도커 컨테이너 기동
+        run: |
+          set -euo pipefail
+          docker run -d --name community-service-ci \
+            --add-host host.docker.internal:host-gateway \
+            -p 18080:8080 \
+            -p 19091:9091 \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e JWT_ISSUER=identity-service \
+            -e JWT_SECRET=ci-only-jwt-secret-with-at-least-32-bytes \
+            -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/travel_diary_dev \
+            -e SPRING_DATASOURCE_USERNAME=travel_diary \
+            -e SPRING_DATASOURCE_PASSWORD=travel_diary_password \
+            -e LOGGING_FILE_NAME=/var/log/travel-planner/travel-planner.log \
+            community-service:ci
+
+      - name: Health / Readiness 검증
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:19091/actuator/health/readiness >/dev/null 2>&1; then
+              break
+            fi
+            if [ "${attempt}" -eq 60 ]; then
+              echo "readiness 대기 120초 초과" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          curl --fail --silent http://127.0.0.1:19091/actuator/health \
+            | jq --exit-status '.status == "UP"' >/dev/null
+
+          curl --fail --silent http://127.0.0.1:19091/actuator/health/readiness \
+            | jq --exit-status '.status == "UP"' >/dev/null
+
+          curl --fail --silent http://127.0.0.1:18080/api/ping \
+            | jq --exit-status '.status == "ok" and .profile == "prod"' >/dev/null
+
+      # readiness가 200이어도 기동 직후 죽었다 살아난 경우가 있어 따로 본다.
+      - name: 컨테이너 재시작 여부 확인
+        run: |
+          set -euo pipefail
+          restart_count="$(docker inspect --format '{{.RestartCount}}' community-service-ci)"
+          test "${restart_count}" = "0"
+
+      - name: 진단 로그 수집
+        if: failure()
+        run: |
+          mkdir -p "${RUNNER_TEMP}/container-diagnostics"
+          docker logs community-service-ci \
+            > "${RUNNER_TEMP}/container-diagnostics/app.log" 2>&1 || true
+          docker inspect community-service-ci \
+            > "${RUNNER_TEMP}/container-diagnostics/inspect.json" 2>&1 || true
+
+      - name: 진단 로그 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-diagnostics
+          path: ${{ runner.temp }}/container-diagnostics
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: 도커 컨테이너 정리
+        if: always()
+        run: docker rm -f community-service-ci 2>/dev/null || true
