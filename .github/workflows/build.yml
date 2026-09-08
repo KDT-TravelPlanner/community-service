@@ -10,6 +10,9 @@ name: Community 도커 이미지 및 HTTP Adapter 검증
 #   concurrency 로는 안 막힌다(push 는 refs/heads/*, PR 은 refs/pull/*/merge 라 그룹이 다르다).
 #   알고 감수하는 비용이다.
 on:
+  # main 릴리스에서는 release-main-dev.yml이 이 검증을 재사용한 뒤,
+  # 성공했을 때만 ECR publish를 호출한다.
+  workflow_call:
   pull_request:
     branches: [develop, main]
   push:
