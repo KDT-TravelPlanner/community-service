@@ -37,7 +37,7 @@ jobs:
   update-gitops:
     name: Update GitOps repo
     needs: publish
-    uses: KDT-TravelPlanner/travel-gitops/.github/workflows/update-gitops.yml@develop
+    uses: KDT-TravelPlanner/travel-gitops/.github/workflows/update-gitops.yml@main
     secrets:
       GITOPS_APP_ID: ${{ secrets.GITOPS_APP_ID }}
       GITOPS_APP_PRIVATE_KEY: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
